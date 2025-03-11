@@ -1,112 +1,57 @@
-#The repo is fully coded and modified by @Dypixxx.
-#Please do not sell or remove credits.
-
-from pyrogram import Client, filters
-import shutil, time, os, instaloader, asyncio
-from pyrogram.errors import *
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from config import *
-from .fsub import get_fsub
-from .db import data
-
-user_last_download_time = {}
-@Client.on_message(filters.text & filters.private & ~filters.command(['start','ban', 'unban', 'broadcast']))
-async def download_instagram_content(client, message):
-    if message.text.startswith("/"):return
-    if await data.is_user_banned(message.from_user.id):
-        await message.reply("**🚫 You are banned from using this bot**",
-                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Support", user_id=int(ADMIN))]]))
-        return
-    if IS_FSUB and not await get_fsub(client, message):return
-    try:
-        if ENABLE_FLOOD_WAIT:
-            current_time = time.time()
-            last_download_time = user_last_download_time.get(message.chat.id, 0)
-            remaining_time = FLOOD_WAIT_TIME - (current_time - last_download_time)
-            if remaining_time > 0:
-                T = await message.reply_text("**Pʟᴇᴀsᴇ ᴡᴀɪᴛ...**")
-                while remaining_time > 0:
-                    minutes, seconds = divmod(int(remaining_time), 60)
-                    time_text = f"{minutes}m{seconds}s" if minutes > 0 else f"{seconds}s"
-                    try:
-                        await T.edit_text(
-                            f"**Pʟᴇᴀsᴇ ᴡᴀɪᴛ {time_text} ʙᴇғᴏʀᴇ ᴍᴀᴋɪɴɢ ᴀɴᴏᴛʜᴇʀ ʀᴇǫᴜᴇsᴛ.**"
-                        )
-                    except Exception as e:
-                        print(f"Error updating flood wait text: {e}")
-                        break
-                    await asyncio.sleep(1)
-                    current_time = time.time()
-                    remaining_time = FLOOD_WAIT_TIME - (current_time - last_download_time)
-                try:
-                    await T.edit_text("**Nᴏᴡ ʏᴏᴜ ᴄᴀɴ sᴇɴᴅ ᴍᴇ ᴀɴᴏᴛʜᴇʀ ᴛᴀsᴋ!**")
-                except Exception as e:
-                    print(f"Error finalizing flood wait text: {e}")
-                return
-            user_last_download_time[message.chat.id] = current_time
-        url = message.text.strip()
-        if not url.startswith("https://www.instagram.com/"):
-            await message.reply("**Pʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ Iɴsᴛᴀɢʀᴀᴍ ᴘᴏsᴛ/ʀᴇᴇʟ ʟɪɴᴋ...**")
-            return
-        T = await message.reply("**Pʀᴏᴄᴇssɪɴɢ ʏᴏᴜʀ ʀᴇǫᴜᴇsᴛ...**")
-        L = instaloader.Instaloader()
-        download_dir = "downloads"
-        os.makedirs(download_dir, exist_ok=True)
-        if "/reel/" in url or "/p/" in url:
-            shortcode = url.split("/")[-2]
-            post = instaloader.Post.from_shortcode(L.context, shortcode)
-            L.download_post(post, target=download_dir)
+if message.text.startswith("/insta"):
+    # Instagram URL को प्राप्त करें
+    insta_url = message.text.replace("/insta", "").strip()
+    
+    # API URL तैयार करें
+    api_url = f"https://insta-dl.hazex.workers.dev/?url={insta_url}"
+    response = HTTP.get(api_url)
+    
+    # यदि अनुरोध सफल है
+    if response.status_code == 200:
+        data = bunchify(response.json())
+        
+        download_url = data.result.url
+        extension = data.result.extension
+        
+        # चैनल के लिए इनलाइन बटन
+        inline_button = {
+            "inline_keyboard": [[
+                {"text": "🔗 Join Our Channel", "url": "https://t.me/BOTxUPDATE"}
+            ]]
+        }
+        
+        # मीडिया के प्रकार के आधार पर भेजें
+        if extension in ["mp4", "mkv"]:
+            bot.sendChatAction(chat_id=message.chat.id, action="upload_video")
+            bot.sendVideo(
+                chat_id=message.chat.id,
+                video=download_url,
+                caption="🎥 *Instagram Video*",
+                parse_mode="markdown",
+                reply_to_message_id=message.message_id,
+                reply_markup=inline_button
+            )
+        elif extension in ["jpg", "jpeg", "png"]:
+            bot.sendChatAction(chat_id=message.chat.id, action="upload_photo")
+            bot.sendPhoto(
+                chat_id=message.chat.id,
+                photo=download_url,
+                caption="📸 *Instagram Photo*",
+                parse_mode="markdown",
+                reply_to_message_id=message.message_id,
+                reply_markup=inline_button
+            )
         else:
-            await T.delete()
-            await message.reply("**Pʟᴇᴀsᴇ sᴇɴᴅ ᴀ ʀᴇᴇʟ ᴏʀ ᴘᴏsᴛ ʟɪɴᴋ.**")
-            return
-        downloaded_files = os.listdir(download_dir)
-        total_photos = 0
-        total_videos = 0
-        if "/reel/" in url:
-            for file in downloaded_files:
-                file_path = os.path.join(download_dir, file)
-                if file_path.endswith('.mp4'):
-                    await client.send_video(
-                        chat_id=DUMP_CHANNEL,
-                        video=file_path,
-                        caption=f"**Dᴏᴡɴʟᴏᴀᴅᴇᴅ Bʏ {message.from_user.mention}\n\nSᴏᴜʀᴄᴇ URL: <a href='{url}'>Cʟɪᴄᴋ Hᴇʀᴇ</a>**"
-                    )
-                    await message.reply_video(video=file_path, caption="**Tʜᴀɴᴋs Fᴏʀ Usɪɴɢ ᴍᴇ ❤️**")
-                    os.remove(file_path)
-                    total_videos += 1
-                else:
-                    os.remove(file_path)
-        elif "/p/" in url:
-            for file in downloaded_files:
-                file_path = os.path.join(download_dir, file)
-                if file_path.endswith(('.jpg', '.png')):
-                    await client.send_photo(
-                        chat_id=DUMP_CHANNEL,
-                        photo=file_path,
-                        caption=f"**Dᴏᴡɴʟᴏᴀᴅᴇᴅ Bʏ {message.from_user.mention}\n\nSᴏᴜʀᴄᴇ URL: <a href='{url}'>Cʟɪᴄᴋ Hᴇʀᴇ</a>**"
-                    )
-                    await message.reply_photo(photo=file_path)
-                    os.remove(file_path)
-                    total_photos += 1
-                elif file_path.endswith('.mp4'):
-                    os.remove(file_path)
-        shutil.rmtree(download_dir)
-        await T.delete()
-        if total_photos > 0 and total_videos == 0:
-            await message.reply(f"**Dᴏᴡɴʟᴏᴀᴅᴇᴅ {total_photos} ᴘʜᴏᴛᴏ's sᴜᴄᴄᴇssғᴜʟʟʏ...**")
-        elif total_videos > 0 and total_photos == 0:
-            await message.reply(f"**Dᴏᴡɴʟᴏᴀᴅᴇᴅ {total_videos} ᴠɪᴅᴇᴏ's sᴜᴄᴄᴇssғᴜʟʟʏ...**")
-        else:
-            await message.reply("**Nᴏ ᴠᴀʟɪᴅ ᴄᴏɴᴛᴇɴᴛ ғᴏᴜɴᴅ ᴛᴏ ᴅᴏᴡɴʟᴏᴀᴅ...**")
-    except FloodWait as e:
-        await message.reply_text(f"Please wait {e.value} seconds and try again.")
-    except InputUserDeactivated:
-        print(f"User {message.chat.id} is deactivated.")
-    except UserIsBlocked:
-        print(f"User {message.chat.id} has blocked the bot.")
-    except PeerIdInvalid:
-        print(f"Bot cannot initiate conversation with {message.chat.id}.")
-    except Exception as error:
-        print(error)
-        await message.reply_text(f"An error occurred: {str(error)}")
+            # असमर्थित मीडिया प्रारूप के लिए जवाब
+            bot.replyText(
+                chat_id=message.chat.id, 
+                text="⚠️ *Unsupported media format.*", 
+                reply_to_message_id=message.message_id
+            )
+    else:
+        # URL को प्रोसेस करने में त्रुटि
+        bot.replyText(
+            chat_id=message.chat.id,
+            text="⚠️ *Oops! Unable to process the URL. Please check the link and try again.*", 
+            reply_to_message_id=message.message_id
+        )
