@@ -15,7 +15,7 @@ DB_URI = os.getenv("DB_URI", "mongodb+srv://6ijziglmyz:EdlupMESij8BXWh5@cluster0
 DB_NAME = os.getenv("DB_NAME", "Cluster0")
 
 IS_FSUB = bool(os.environ.get("FSUB", True)) # Set "True" For Force Subscribe Enable
-AUTH_CHANNELS = os.environ.get("AUTH_CHANNEL", "-1002090913537") # Add Multiple Channels iD By Space
+AUTH_CHANNELS = os.environ.get("AUTH_CHANNEL", "-1001315120330") # Add Multiple Channels iD By Space
 AUTH_CHANNELS = [int(channel_id) for channel_id in AUTH_CHANNELS.split(",")] # DONT TOUCH
 
 ENABLE_FLOOD_WAIT = bool(os.getenv("ENABLE_FLOOD_WAIT", False)) # Set "True" For Enable Floodwait
